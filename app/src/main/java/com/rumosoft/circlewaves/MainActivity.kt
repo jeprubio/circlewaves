@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
 fun DeviceMap(modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         ExpandingCirclesWithConfig()
+        CategoriesGrid()
     }
 }
 
