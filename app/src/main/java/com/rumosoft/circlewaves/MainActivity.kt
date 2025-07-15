@@ -4,11 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -21,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -34,6 +32,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.rumosoft.circlewaves.ui.theme.CircleWavesTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.min
 
 class MainActivity : ComponentActivity() {
@@ -60,81 +59,108 @@ fun DeviceMap(modifier: Modifier = Modifier) {
 
 data class ExpandingItemsConfig(
     val numberOfWaves: Int = 4,
-    val lineWidth: Float = 1.5f,
-    val delay: Long = 500,
+    val lineWidth: Float = 1f,
+    val delay: Long = 700,
     val expansionDurationMs: Int = 3500,
     val scale: Float = 6.0f,
     val colour: Color = Color(0xFF0B9CEA),
+    val minOpacity: Float = 0.45f  // Changed to 45% opacity for outermost circle
 )
 
 @Composable
 fun ExpandingCirclesWithConfig(config: ExpandingItemsConfig = ExpandingItemsConfig()) {
     val activeWaves = remember { mutableStateListOf<Int>() }
     val updatedConfig by rememberUpdatedState(config)
+    val animationRunning = remember { mutableStateOf(true) }
+
+    val screenRadius = with(LocalDensity.current) {
+        min(
+            LocalConfiguration.current.screenWidthDp.dp.toPx(),
+            LocalConfiguration.current.screenHeightDp.dp.toPx()
+        ) / 2
+    }
+
+    val targetRadius = screenRadius * 2.0f
 
     LaunchedEffect(Unit) {
         for (i in 0 until updatedConfig.numberOfWaves) {
-            delay(updatedConfig.delay)
             activeWaves.add(i)
+            delay(updatedConfig.delay / 2)
         }
+
+        val stopTime = (config.expansionDurationMs * 0.5f).toLong()
+        delay(stopTime)
+        animationRunning.value = false
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        repeat(activeWaves.size) { index ->
+        activeWaves.forEach { index ->
             key(index) {
-                ExpandingWave(config = updatedConfig)
+                ExpandingWave(
+                    config = updatedConfig,
+                    index = index,
+                    isRunning = animationRunning.value,
+                    targetRadius = targetRadius,
+                    startDelay = index * (updatedConfig.delay / 2)
+                )
             }
         }
     }
 }
 
 @Composable
-fun ExpandingWave(config: ExpandingItemsConfig) {
-    val infiniteTransition = rememberInfiniteTransition(label = "Infinite Transition")
-    val animatedRadius by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = maxRadius(config),
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = config.expansionDurationMs,
-                easing = LinearEasing
-            ),
-            repeatMode = RepeatMode.Restart
-        ), label = "Animated Radius"
-    )
-    val animatedOpacity by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = config.expansionDurationMs,
-                easing = LinearEasing
-            ),
-            repeatMode = RepeatMode.Restart
-        ), label = "Animated Opacity"
-    )
+fun ExpandingWave(
+    config: ExpandingItemsConfig,
+    index: Int,
+    isRunning: Boolean,
+    targetRadius: Float,
+    startDelay: Long
+) {
+    val radius = remember { Animatable(0f) }
+    val opacity = remember { Animatable(1f) }
+
+    // Calculate target opacity - outermost (45%) to innermost (85%)
+    val targetOpacity = 0.45f + (index.toFloat() / (config.numberOfWaves - 1).coerceAtLeast(1)) * 0.4f
+
+    LaunchedEffect(Unit) {
+        delay(startDelay)
+
+        launch {
+            radius.animateTo(
+                targetValue = targetRadius,
+                animationSpec = tween(
+                    durationMillis = config.expansionDurationMs,
+                    easing = LinearEasing
+                )
+            )
+        }
+
+        launch {
+            opacity.animateTo(
+                targetValue = targetOpacity,
+                animationSpec = tween(
+                    durationMillis = config.expansionDurationMs,
+                    easing = LinearEasing
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(isRunning) {
+        if (!isRunning) {
+            radius.stop()
+            opacity.stop()
+        }
+    }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
-        val center = Offset(size.width / 2, size.height / 2)
-
         drawCircle(
-            color = config.colour.copy(alpha = animatedOpacity),
-            radius = animatedRadius,
-            center = center,
+            color = config.colour.copy(alpha = opacity.value),
+            radius = radius.value,
+            center = Offset(size.width / 2, size.height / 2),
             style = Stroke(width = config.lineWidth.dp.toPx())
         )
     }
-}
-
-@Composable
-private fun maxRadius(config: ExpandingItemsConfig): Float {
-    val baseRadius = with(LocalDensity.current) {
-        min(
-            LocalConfiguration.current.screenWidthDp.dp.toPx(),
-            LocalConfiguration.current.screenHeightDp.dp.toPx()
-        ) / 2
-    }
-    return baseRadius * config.scale
 }
 
 @Composable
