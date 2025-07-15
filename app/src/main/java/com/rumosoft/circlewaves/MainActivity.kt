@@ -59,7 +59,7 @@ fun DeviceMap(modifier: Modifier = Modifier) {
 }
 
 data class ExpandingItemsConfig(
-    val numberOfWaves: Int = 3,
+    val numberOfWaves: Int = 4,
     val lineWidth: Float = 1.5f,
     val delay: Long = 500,
     val expansionDurationMs: Int = 3500,

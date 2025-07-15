@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -17,12 +18,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.constraintlayout.compose.ConstraintLayout
+import com.rumosoft.circlewaves.ui.theme.CircleWavesTheme
 import kotlinx.coroutines.launch
-
-data class Category(val id: String, val name: String)
 
 @Composable
 fun CategoriesGrid() {
@@ -194,3 +195,14 @@ fun AnimatedCategory(
         Text(text = text, color = Color.White, fontSize = 12.sp)
     }
 }
+
+@Composable
+@Preview
+fun CategoriesPreview() {
+    CircleWavesTheme {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            CategoriesGrid()
+        }
+    }
+}
+
