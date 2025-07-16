@@ -4,19 +4,24 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,7 +37,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.rumosoft.circlewaves.ui.theme.CircleWavesTheme
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.math.min
 
 class MainActivity : ComponentActivity() {
@@ -51,27 +55,56 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun DeviceMap(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        ExpandingCirclesWithConfig()
-        CategoriesGrid()
+    val refreshKey = remember { mutableIntStateOf(0) }
+
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { refreshKey.intValue++ }
+            ) {
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.Refresh,
+                    contentDescription = "Refresh"
+                )
+            }
+        }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentAlignment = Alignment.Center
+        ) {
+            key(refreshKey.intValue) {
+                ExpandingCirclesWithConfig(
+                    config = ExpandingItemsConfig(
+                        disableAnimation = false,
+                    )
+                )
+            }
+        }
     }
 }
 
 data class ExpandingItemsConfig(
     val numberOfWaves: Int = 4,
     val lineWidth: Float = 1f,
-    val delay: Long = 700,
-    val expansionDurationMs: Int = 3500,
+    val delay: Long = 200,
+    val expansionDurationMs: Int = 500,
     val scale: Float = 6.0f,
     val colour: Color = Color(0xFF0B9CEA),
-    val minOpacity: Float = 0.45f  // Changed to 45% opacity for outermost circle
+    val minOpacity: Float = 0.45f,
+    val disableAnimation: Boolean = false,
 )
+
+private const val INITIAL_STABILIZATION_DELAY = 100L
 
 @Composable
 fun ExpandingCirclesWithConfig(config: ExpandingItemsConfig = ExpandingItemsConfig()) {
     val activeWaves = remember { mutableStateListOf<Int>() }
     val updatedConfig by rememberUpdatedState(config)
-    val animationRunning = remember { mutableStateOf(true) }
+    val animationFinished = remember { mutableStateOf(false) }
 
     val screenRadius = with(LocalDensity.current) {
         min(
@@ -79,18 +112,24 @@ fun ExpandingCirclesWithConfig(config: ExpandingItemsConfig = ExpandingItemsConf
             LocalConfiguration.current.screenHeightDp.dp.toPx()
         ) / 2
     }
-
-    val targetRadius = screenRadius * 2.0f
+    val targetRadius = screenRadius * 1.80f
 
     LaunchedEffect(Unit) {
-        for (i in 0 until updatedConfig.numberOfWaves) {
-            activeWaves.add(i)
-            delay(updatedConfig.delay / 2)
-        }
+        if (updatedConfig.disableAnimation) {
+            repeat(updatedConfig.numberOfWaves) { activeWaves.add(it) }
+            animationFinished.value = true
+        } else {
+            delay(INITIAL_STABILIZATION_DELAY)
+            val waveDelay = minOf(config.delay / 2, (config.expansionDurationMs / 8).toLong())
 
-        val stopTime = (config.expansionDurationMs * 0.5f).toLong()
-        delay(stopTime)
-        animationRunning.value = false
+            for (i in 0 until updatedConfig.numberOfWaves) {
+                activeWaves.add(i)
+                delay(waveDelay)
+            }
+
+            delay(config.expansionDurationMs.toLong())
+            animationFinished.value = true
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -99,9 +138,8 @@ fun ExpandingCirclesWithConfig(config: ExpandingItemsConfig = ExpandingItemsConf
                 ExpandingWave(
                     config = updatedConfig,
                     index = index,
-                    isRunning = animationRunning.value,
                     targetRadius = targetRadius,
-                    startDelay = index * (updatedConfig.delay / 2)
+                    startDelay = index * minOf(config.delay / 2, (config.expansionDurationMs / 8).toLong())
                 )
             }
         }
@@ -112,51 +150,55 @@ fun ExpandingCirclesWithConfig(config: ExpandingItemsConfig = ExpandingItemsConf
 fun ExpandingWave(
     config: ExpandingItemsConfig,
     index: Int,
-    isRunning: Boolean,
     targetRadius: Float,
     startDelay: Long
 ) {
-    val radius = remember { Animatable(0f) }
-    val opacity = remember { Animatable(1f) }
+    val targetOpacity = 0.85f - (index.toFloat() / (config.numberOfWaves - 1).coerceAtLeast(1)) * 0.55f
 
-    // Calculate target opacity - outermost (45%) to innermost (85%)
-    val targetOpacity = 0.45f + (index.toFloat() / (config.numberOfWaves - 1).coerceAtLeast(1)) * 0.4f
+    val minRadius = targetRadius * 0.33f
+    val waveTargetRadius = if (config.numberOfWaves > 1) {
+        minRadius + (index.toFloat() / (config.numberOfWaves - 1)) * (targetRadius - minRadius)
+    } else {
+        targetRadius
+    }
+
+    val animationStarted = remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        delay(startDelay)
-
-        launch {
-            radius.animateTo(
-                targetValue = targetRadius,
-                animationSpec = tween(
-                    durationMillis = config.expansionDurationMs,
-                    easing = LinearEasing
-                )
-            )
-        }
-
-        launch {
-            opacity.animateTo(
-                targetValue = targetOpacity,
-                animationSpec = tween(
-                    durationMillis = config.expansionDurationMs,
-                    easing = LinearEasing
-                )
-            )
+        if (!config.disableAnimation) {
+            delay(startDelay)
+            animationStarted.value = true
         }
     }
 
-    LaunchedEffect(isRunning) {
-        if (!isRunning) {
-            radius.stop()
-            opacity.stop()
-        }
-    }
+    val radius by animateFloatAsState(
+        targetValue = if (config.disableAnimation) waveTargetRadius
+        else if (!animationStarted.value) 0f
+        else waveTargetRadius,
+        animationSpec = if (config.disableAnimation) spring()
+        else tween(
+            durationMillis = config.expansionDurationMs,
+            easing = LinearEasing
+        ),
+        label = "radius"
+    )
+
+    val opacity by animateFloatAsState(
+        targetValue = if (config.disableAnimation) targetOpacity
+        else if (!animationStarted.value) 1f
+        else targetOpacity,
+        animationSpec = if (config.disableAnimation) spring()
+        else tween(
+            durationMillis = config.expansionDurationMs,
+            easing = LinearEasing
+        ),
+        label = "opacity"
+    )
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         drawCircle(
-            color = config.colour.copy(alpha = opacity.value),
-            radius = radius.value,
+            color = config.colour.copy(alpha = opacity),
+            radius = radius,
             center = Offset(size.width / 2, size.height / 2),
             style = Stroke(width = config.lineWidth.dp.toPx())
         )
