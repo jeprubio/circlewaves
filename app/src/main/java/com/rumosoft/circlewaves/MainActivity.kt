@@ -4,9 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -90,8 +88,7 @@ fun DeviceMap(modifier: Modifier = Modifier) {
 data class ExpandingItemsConfig(
     val numberOfWaves: Int = 4,
     val lineWidth: Float = 1f,
-    val delay: Long = 200,
-    val expansionDurationMs: Int = 500,
+    val expansionDurationMs: Int = 800,
     val scale: Float = 6.0f,
     val colour: Color = Color(0xFF0B9CEA),
     val minOpacity: Float = 0.45f,
@@ -171,9 +168,9 @@ fun ExpandingWave(
         targetValue = if (config.disableAnimation) waveTargetRadius
         else if (!animationStarted.value) 0f
         else waveTargetRadius,
-        animationSpec = spring(
-            dampingRatio = 0.7f,
-            stiffness = 300f,
+        animationSpec = tween(
+            durationMillis = config.expansionDurationMs,
+            easing = androidx.compose.animation.core.EaseInOutBack
         ),
         label = "radius"
     )
@@ -182,9 +179,9 @@ fun ExpandingWave(
         targetValue = if (config.disableAnimation) targetOpacity
         else if (!animationStarted.value) 1f
         else targetOpacity,
-        animationSpec = spring(
-            dampingRatio = 0.7f,
-            stiffness = 300f
+        animationSpec = tween(
+            durationMillis = config.expansionDurationMs,
+            easing = androidx.compose.animation.core.EaseInOutBack
         ),
         label = "opacity"
     )
