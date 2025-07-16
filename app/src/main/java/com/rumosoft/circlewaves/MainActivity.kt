@@ -120,12 +120,8 @@ fun ExpandingCirclesWithConfig(config: ExpandingItemsConfig = ExpandingItemsConf
             animationFinished.value = true
         } else {
             delay(INITIAL_STABILIZATION_DELAY)
-            val waveDelay = minOf(config.delay / 2, (config.expansionDurationMs / 8).toLong())
 
-            for (i in 0 until updatedConfig.numberOfWaves) {
-                activeWaves.add(i)
-                delay(waveDelay)
-            }
+            repeat(updatedConfig.numberOfWaves) { activeWaves.add(it) }
 
             delay(config.expansionDurationMs.toLong())
             animationFinished.value = true
@@ -139,7 +135,7 @@ fun ExpandingCirclesWithConfig(config: ExpandingItemsConfig = ExpandingItemsConf
                     config = updatedConfig,
                     index = index,
                     targetRadius = targetRadius,
-                    startDelay = index * minOf(config.delay / 2, (config.expansionDurationMs / 8).toLong())
+                    startDelay = 0
                 )
             }
         }
@@ -175,10 +171,9 @@ fun ExpandingWave(
         targetValue = if (config.disableAnimation) waveTargetRadius
         else if (!animationStarted.value) 0f
         else waveTargetRadius,
-        animationSpec = if (config.disableAnimation) spring()
-        else tween(
-            durationMillis = config.expansionDurationMs,
-            easing = LinearEasing
+        animationSpec = spring(
+            dampingRatio = 0.7f,
+            stiffness = 300f,
         ),
         label = "radius"
     )
@@ -187,10 +182,9 @@ fun ExpandingWave(
         targetValue = if (config.disableAnimation) targetOpacity
         else if (!animationStarted.value) 1f
         else targetOpacity,
-        animationSpec = if (config.disableAnimation) spring()
-        else tween(
-            durationMillis = config.expansionDurationMs,
-            easing = LinearEasing
+        animationSpec = spring(
+            dampingRatio = 0.7f,
+            stiffness = 300f
         ),
         label = "opacity"
     )
